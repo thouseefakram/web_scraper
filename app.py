@@ -7,7 +7,7 @@ from flask import send_from_directory
 import base64
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  # Enable CORS for all routes 
 
 # Serve static files
 @app.route('/')
@@ -20,10 +20,16 @@ def scrape():
     data = request.get_json()
     target_url = data.get('target_url')
     container_class = data.get('container_class')
-    output_file = data.get('output_file', 'scraped_data.json')
+    output_file = 'scraped_data.json'
     need_login = data.get('need_login', 'no')
     login_url = data.get('login_url', '')
+    password_page_url = data.get('password_page_url', '')
     scrape_images = data.get('scrape_images', 'no')
+    login_email = data.get('login_email', '')
+    login_password = data.get('login_password', '')
+    email_selector = data.get('email_selector', '')
+    password_selector = data.get('password_selector', '')
+    submit_selector = data.get('submit_selector', '')
 
     # Validate inputs
     if not target_url or not container_class:
@@ -32,9 +38,28 @@ def scrape():
             'message': 'Target URL and Container Class are required fields'
         }), 400
 
+    if need_login.lower() == 'yes' and not login_url:
+        return jsonify({
+            'status': 'error',
+            'message': 'Login URL is required when login is needed'
+        }), 400
+
     # Run the scraper
     try:
-        result = run_scraper(target_url, container_class, output_file, need_login, login_url, scrape_images)
+        result = run_scraper(
+            target_url=target_url,
+            container_class=container_class,
+            output_file=output_file,
+            need_login=need_login,
+            login_url=login_url,
+            password_page_url=password_page_url,
+            scrape_images=scrape_images,
+            login_email=login_email,
+            login_password=login_password,
+            email_selector=email_selector,
+            password_selector=password_selector,
+            submit_selector=submit_selector
+        )
         return jsonify({
             'status': 'success',
             'message': 'Scraping completed successfully!',
@@ -47,7 +72,10 @@ def scrape():
             'message': str(e)
         }), 500
 
-def run_scraper(target_url, container_class, output_file, need_login, login_url, scrape_images):
+def run_scraper(target_url, container_class, output_file, need_login, login_url, 
+                scrape_images, login_email=None, login_password=None,
+                email_selector=None, password_selector=None, submit_selector=None,
+                password_page_url=None):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
@@ -55,14 +83,44 @@ def run_scraper(target_url, container_class, output_file, need_login, login_url,
 
         try:
             if need_login.lower() == "yes":
-                # Open login page for manual login
+                # Go to login page
                 page.goto(login_url)
-                # Wait for manual login
-                page.wait_for_timeout(30000)  # Wait 30 seconds for manual login
-                # After login, go directly to target URL
+                
+                # Fill login form if selectors provided
+                if email_selector and password_selector and submit_selector:
+                    try:
+                        # Fill email/username
+                        page.fill(email_selector, login_email)
+                        
+                        # Fill password if on same page
+                        if password_selector:
+                            page.fill(password_selector, login_password)
+                        
+                        # Click submit button
+                        page.click(submit_selector)
+                        
+                        # If there's a separate password page, handle that
+                        if password_page_url:
+                            page.wait_for_timeout(2000)  # Wait for navigation
+                            page.goto(password_page_url)
+                            page.wait_for_selector(password_selector)
+                            page.fill(password_selector, login_password)
+                            if submit_selector:
+                                page.click(submit_selector)
+                        
+                        # Wait for login to complete
+                        page.wait_for_timeout(3000)
+                    except Exception as e:
+                        print(f"Auto-login failed: {e}. Falling back to manual login.")
+                        page.wait_for_timeout(30000)  # Wait 30 seconds for manual login
+                else:
+                    # Fallback to manual login
+                    page.wait_for_timeout(30000)
+                
+                # After login, go to target URL
                 page.goto(target_url)
             else:
-                # Navigate directly to the target page if no login needed
+                # Navigate directly if no login needed
                 page.goto(target_url)
 
             # Wait for selector with timeout and custom error message
@@ -138,4 +196,4 @@ def run_scraper(target_url, container_class, output_file, need_login, login_url,
 
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
-    app.run(debug=True)
+    app.run(debug=True) 

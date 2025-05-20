@@ -13,6 +13,8 @@
         .scraped-image { max-width: 200px; max-height: 200px; margin: 5px; }
         .image-container { display: flex; flex-wrap: wrap; margin-top: 10px; }
         .data-item { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .login-fields { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px; }
+        .custom-selector { margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -26,11 +28,7 @@
             <div class="mb-3">
                 <label for="container_class" class="form-label">Container Class Name</label>
                 <input type="text" class="form-control" id="container_class" name="container_class" required>
-                <div class="form-text">Enter the class name of the container to scrape (e.g., "wikitable sortable")</div>
-            </div>
-            <div class="mb-3">
-                <label for="output_file" class="form-label">Output File Name</label>
-                <input type="text" class="form-control" id="output_file" name="output_file" value="scraped_data.json">
+                <div class="form-text">Enter the class name of the container to scrape (e.g., "product-item")</div>
             </div>
             <div class="mb-3">
                 <div class="form-check">
@@ -40,9 +38,62 @@
                     </label>
                 </div>
             </div>
-            <div class="mb-3" id="loginUrlContainer" style="display: none;">
-                <label for="login_url" class="form-label">Login URL</label>
-                <input type="url" class="form-control" id="login_url" name="login_url">
+            <div id="loginFieldsContainer" class="login-fields" style="display: none;">
+                <div class="mb-3">
+                    <label for="login_url" class="form-label">Login Page URL</label>
+                    <input type="url" class="form-control" id="login_url" name="login_url" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password_page_url" class="form-label">Password Page URL (if separate)</label>
+                    <input type="url" class="form-control" id="password_page_url" name="password_page_url" placeholder="Only needed if password is on a different page">
+                </div>
+                <div class="mb-3">
+                    <label for="login_email" class="form-label">Login Email/Username</label>
+                    <input type="text" class="form-control" id="login_email" name="login_email" required>
+                </div>
+                <div class="mb-3">
+                    <label for="login_password" class="form-label">Login Password</label>
+                    <input type="password" class="form-control" id="login_password" name="login_password" required>
+                </div>
+                <div class="mb-3">
+                    <label for="email_selector" class="form-label">Email Input Selector</label>
+                    <select class="form-select" id="email_selector" name="email_selector" required>
+                        <option value="">Select email input selector</option>
+                        <option value="#email">#email</option>
+                        <option value="#username">#username</option>
+                        <option value="input[name='email']">input[name='email']</option>
+                        <option value="input[name='username']">input[name='username']</option>
+                        <option value="input[type='email']">input[type='email']</option>
+                        <option value="input[type='text']">input[type='text']</option>
+                        <option value="custom">Custom Selector</option>
+                    </select>
+                    <input type="text" class="form-control custom-selector" id="custom_email_selector" style="display: none;" placeholder="Enter custom email selector (e.g., '.login-form input[type=text]')">
+                </div>
+                <div class="mb-3">
+                    <label for="password_selector" class="form-label">Password Input Selector</label>
+                    <select class="form-select" id="password_selector" name="password_selector" required>
+                        <option value="">Select password input selector</option>
+                        <option value="#password">#password</option>
+                        <option value="input[name='password']">input[name='password']</option>
+                        <option value="input[type='password']">input[type='password']</option>
+                        <option value="custom">Custom Selector</option>
+                    </select>
+                    <input type="text" class="form-control custom-selector" id="custom_password_selector" style="display: none;" placeholder="Enter custom password selector">
+                </div>
+                <div class="mb-3">
+                <label for="submit_selector" class="form-label">Submit Button Selector</label>
+                <select class="form-select" id="submit_selector" name="submit_selector" required>
+                    <option value="">Select submit button selector</option>
+                    <option value="button[type='submit']">button[type='submit']</option>
+                    <option value="#submit">#submit</option>
+                    <option value="#login">#login</option>
+                    <option value="#signin">#signin</option>
+                    <option value=".buttonall">.buttonall</option>
+                    <option value="input[type='submit']">input[type='submit']</option>
+                    <option value="custom">Custom Selector</option>
+                </select>
+                <input type="text" class="form-control custom-selector" id="custom_submit_selector" style="display: none;" placeholder="Enter custom submit selector">
+            </div>
             </div>
             <div class="mb-3">
                 <div class="form-check">
@@ -71,162 +122,200 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Previous HTML code remains the same until the script section -->
-<script>
-    document.getElementById('need_login').addEventListener('change', function() {
-        document.getElementById('loginUrlContainer').style.display = 
-            this.checked ? 'block' : 'none';
-        if (this.checked) {
-            document.getElementById('login_url').required = true;
-        } else {
-            document.getElementById('login_url').required = false;
-        }
-    });
-
-    document.getElementById('scraperForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const submitBtn = document.querySelector('#scraperForm button[type="submit"]');
-        const submitText = document.getElementById('submitText');
-        const spinner = document.getElementById('loadingSpinner');
-        
-        submitText.style.display = 'none';
-        spinner.style.display = 'inline-block';
-        
-        // Clear previous results
-        document.getElementById('resultAlert').style.display = 'none';
-        document.getElementById('resultData').style.display = 'none';
-        
-        // Collect form data
-        const formData = {
-            target_url: document.getElementById('target_url').value,
-            container_class: document.getElementById('container_class').value,
-            output_file: document.getElementById('output_file').value,
-            need_login: document.getElementById('need_login').checked ? 'yes' : 'no',
-            login_url: document.getElementById('need_login').checked ? document.getElementById('login_url').value : '',
-            scrape_images: document.getElementById('scrape_images').checked ? 'yes' : 'no'
-        };
-        
-        fetch('http://localhost:5000/api/scrape', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => Promise.reject(err));
-            }
-            return response.json();
-        })
-        .then(data => {
-            const resultAlert = document.getElementById('resultAlert');
-            const resultData = document.getElementById('resultData');
-            const dataPreview = document.getElementById('dataPreview');
-            const downloadLink = document.getElementById('downloadLink');
+    <script>
+        // Toggle login fields visibility
+        document.getElementById('need_login').addEventListener('change', function() {
+            const loginContainer = document.getElementById('loginFieldsContainer');
+            loginContainer.style.display = this.checked ? 'block' : 'none';
             
-            if (data.status === 'success') {
-                resultAlert.className = 'alert alert-success';
-                resultAlert.textContent = data.message;
-                resultAlert.style.display = 'block';
+            // Set required attributes
+            const fields = ['login_url', 'login_email', 'login_password', 
+                          'email_selector', 'password_selector', 'submit_selector'];
+            fields.forEach(field => {
+                document.getElementById(field).required = this.checked;
+            });
+        });
+
+        // Handle custom selector inputs
+        document.getElementById('email_selector').addEventListener('change', function() {
+            const customInput = document.getElementById('custom_email_selector');
+            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
+            if (this.value !== 'custom') customInput.value = '';
+            customInput.required = this.value === 'custom';
+        });
+
+        document.getElementById('password_selector').addEventListener('change', function() {
+            const customInput = document.getElementById('custom_password_selector');
+            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
+            if (this.value !== 'custom') customInput.value = '';
+            customInput.required = this.value === 'custom';
+        });
+
+        document.getElementById('submit_selector').addEventListener('change', function() {
+            const customInput = document.getElementById('custom_submit_selector');
+            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
+            if (this.value !== 'custom') customInput.value = '';
+            customInput.required = this.value === 'custom';
+        });
+
+        // Form submission
+        document.getElementById('scraperForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.querySelector('#scraperForm button[type="submit"]');
+            const submitText = document.getElementById('submitText');
+            const spinner = document.getElementById('loadingSpinner');
+            
+            submitText.style.display = 'none';
+            spinner.style.display = 'inline-block';
+            
+            // Clear previous results
+            document.getElementById('resultAlert').style.display = 'none';
+            document.getElementById('resultData').style.display = 'none';
+            
+            // Get selector values, using custom if selected
+            const getSelectorValue = (selectorId, customSelectorId) => {
+                const selector = document.getElementById(selectorId);
+                return selector.value === 'custom' 
+                    ? document.getElementById(customSelectorId).value 
+                    : selector.value;
+            };
+            
+            const emailSelector = getSelectorValue('email_selector', 'custom_email_selector');
+            const passwordSelector = getSelectorValue('password_selector', 'custom_password_selector');
+            const submitSelector = getSelectorValue('submit_selector', 'custom_submit_selector');
+            
+            // Collect form data
+            const formData = {
+                target_url: document.getElementById('target_url').value,
+                container_class: document.getElementById('container_class').value,
+                need_login: document.getElementById('need_login').checked ? 'yes' : 'no',
+                login_url: document.getElementById('login_url').value,
+                password_page_url: document.getElementById('password_page_url').value,
+                scrape_images: document.getElementById('scrape_images').checked ? 'yes' : 'no',
+                login_email: document.getElementById('login_email').value,
+                login_password: document.getElementById('login_password').value,
+                email_selector: emailSelector,
+                password_selector: passwordSelector,
+                submit_selector: submitSelector
+            };
+            
+            fetch('/api/scrape', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                const resultAlert = document.getElementById('resultAlert');
+                const resultData = document.getElementById('resultData');
+                const dataPreview = document.getElementById('dataPreview');
+                const downloadLink = document.getElementById('downloadLink');
                 
-                // Display the scraped data with images
-                dataPreview.innerHTML = '';
-                if (data.data && data.data.length > 0) {
-                    data.data.forEach(item => {
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'data-item';
-                        
-                        const itemHeader = document.createElement('h5');
-                        itemHeader.textContent = `Container ${item.container_number}`;
-                        itemDiv.appendChild(itemHeader);
-                        
-                        // Add text content
-                        const textContent = document.createElement('div');
-                        for (const key in item) {
-                            if (key.startsWith('content-')) {
-                                const p = document.createElement('p');
-                                p.textContent = `${key}: ${item[key]}`;
-                                textContent.appendChild(p);
-                            }
-                        }
-                        itemDiv.appendChild(textContent);
-                        
-                        // Add images if they exist
-                        if (item.images) {
-                            const imagesHeader = document.createElement('h6');
-                            imagesHeader.textContent = 'Images:';
-                            itemDiv.appendChild(imagesHeader);
+                if (data.status === 'success') {
+                    resultAlert.className = 'alert alert-success';
+                    resultAlert.textContent = data.message;
+                    resultAlert.style.display = 'block';
+                    
+                    // Display the scraped data with images
+                    dataPreview.innerHTML = '';
+                    if (data.data && data.data.length > 0) {
+                        data.data.forEach(item => {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'data-item';
                             
-                            const imagesContainer = document.createElement('div');
-                            imagesContainer.className = 'image-container';
+                            const itemHeader = document.createElement('h5');
+                            itemHeader.textContent = `Container ${item.container_number}`;
+                            itemDiv.appendChild(itemHeader);
                             
-                            item.images.forEach(imgObj => {
-                                for (const imgKey in imgObj) {
-                                    const img = document.createElement('img');
-                                    img.src = imgObj[imgKey];
-                                    img.className = 'scraped-image';
-                                    img.alt = imgKey;
-                                    imagesContainer.appendChild(img);
+                            // Add text content
+                            const textContent = document.createElement('div');
+                            for (const key in item) {
+                                if (key.startsWith('content-')) {
+                                    const p = document.createElement('p');
+                                    p.textContent = `${key}: ${item[key]}`;
+                                    textContent.appendChild(p);
                                 }
-                            });
+                            }
+                            itemDiv.appendChild(textContent);
                             
-                            itemDiv.appendChild(imagesContainer);
-                        }
-                        
-                        dataPreview.appendChild(itemDiv);
-                    });
+                            // Add images if they exist
+                            if (item.images) {
+                                const imagesHeader = document.createElement('h6');
+                                imagesHeader.textContent = 'Images:';
+                                itemDiv.appendChild(imagesHeader);
+                                
+                                const imagesContainer = document.createElement('div');
+                                imagesContainer.className = 'image-container';
+                                
+                                item.images.forEach(imgObj => {
+                                    for (const imgKey in imgObj) {
+                                        const img = document.createElement('img');
+                                        img.src = imgObj[imgKey];
+                                        img.className = 'scraped-image';
+                                        img.alt = imgKey;
+                                        imagesContainer.appendChild(img);
+                                    }
+                                });
+                                
+                                itemDiv.appendChild(imagesContainer);
+                            }
+                            
+                            dataPreview.appendChild(itemDiv);
+                        });
+                    } else {
+                        dataPreview.innerHTML = '<p>No data found in the specified containers.</p>';
+                    }
+                    
+                    resultData.style.display = 'block';
+                    downloadLink.href = `/static/scraped_data.json`;
+                    downloadLink.download = 'scraped_data.json';
                 } else {
-                    dataPreview.innerHTML = '<p>No data found in the specified containers.</p>';
+                    resultAlert.className = 'alert alert-danger';
+                    resultAlert.textContent = data.message;
+                    resultAlert.style.display = 'block';
+                    resultData.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const resultAlert = document.getElementById('resultAlert');
+                resultAlert.className = 'alert alert-danger';
+                
+                const errorMessage = error.message || 
+                                   (error.error && error.error.message) || 
+                                   'An error occurred during scraping.';
+                
+                if (errorMessage.includes('class name') || errorMessage.includes('No elements found')) {
+                    resultAlert.innerHTML = `
+                        ${errorMessage}<br><br>
+                        <strong>Tips:</strong>
+                        <ul>
+                            <li>Check if the class name is correct</li>
+                            <li>Make sure the elements are visible when the page loads</li>
+                            <li>The page might require JavaScript to render the elements</li>
+                            <li>Try inspecting the page in browser developer tools</li>
+                        </ul>
+                    `;
+                } else {
+                    resultAlert.textContent = errorMessage;
                 }
                 
-                resultData.style.display = 'block';
-                downloadLink.href = `http://localhost:5000/static/${data.output_file}`;
-                downloadLink.download = data.output_file;
-            } else {
-                resultAlert.className = 'alert alert-danger';
-                resultAlert.textContent = data.message;
                 resultAlert.style.display = 'block';
-                resultData.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            const resultAlert = document.getElementById('resultAlert');
-            resultAlert.className = 'alert alert-danger';
-            
-            // Display the error message from the server if available
-            const errorMessage = error.message || 
-                               (error.error && error.error.message) || 
-                               'An error occurred during scraping.';
-            
-            // Special handling for class name errors
-            if (errorMessage.includes('class name') || errorMessage.includes('No elements found')) {
-                resultAlert.innerHTML = `
-                    ${errorMessage}<br><br>
-                    <strong>Tips:</strong>
-                    <ul>
-                        <li>Check if the class name is correct</li>
-                        <li>Make sure the elements are visible when the page loads</li>
-                        <li>The page might require JavaScript to render the elements</li>
-                        <li>Try inspecting the page in browser developer tools</li>
-                    </ul>
-                `;
-            } else {
-                resultAlert.textContent = errorMessage;
-            }
-            
-            resultAlert.style.display = 'block';
-            document.getElementById('resultData').style.display = 'none';
-        })
-        .finally(() => {
-            submitText.style.display = 'inline';
-            spinner.style.display = 'none';
+                document.getElementById('resultData').style.display = 'none';
+            })
+            .finally(() => {
+                submitText.style.display = 'inline';
+                spinner.style.display = 'none';
+            });
         });
-    });
-</script>
+    </script>
 </body>
 </html>
-
-
