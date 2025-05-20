@@ -3,264 +3,357 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Scraper</title>
+    <title>Live Web Scraper</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <style>
-        body { padding: 20px; }
-        .form-container { max-width: 800px; margin: 0 auto; }
-        .result-container { margin-top: 30px; }
-        #loadingSpinner { display: none; }
-        .scraped-image { max-width: 200px; max-height: 200px; margin: 5px; }
-        .image-container { display: flex; flex-wrap: wrap; margin-top: 10px; }
-        .data-item { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        .login-fields { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px; }
-        .custom-selector { margin-top: 8px; }
+        :root {
+            --primary-color: #4e73df;
+            --secondary-color: #f8f9fc;
+        }
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .form-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .scraped-item {
+            border-left: 4px solid var(--primary-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .scraped-item:hover {
+            transform: translateY(-2px);
+        }
+        .scraped-image {
+            max-width: 200px;
+            max-height: 200px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            transition: transform 0.2s;
+        }
+        .scraped-image:hover {
+            transform: scale(1.05);
+        }
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .content-line {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: var(--secondary-color);
+            border-radius: 3px;
+        }
+        .page-url {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        #scrapedResults {
+            max-height: 600px;
+            overflow-y: auto;
+            margin-top: 20px;
+            padding-right: 10px;
+        }
+        #scrapedResults::-webkit-scrollbar {
+            width: 8px;
+        }
+        #scrapedResults::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #scrapedResults::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 4px;
+        }
+        .status-badge {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .item-count {
+            font-size: 12px;
+            color: #6c757d;
+            margin-left: 5px;
+        }
+        .download-btn-container {
+            margin-top: 10px;
+            display: none;
+        }
+        .download-link {
+            display: block;
+            width: 100%;
+            text-align: center;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        .download-link:hover {
+            background-color: #218838;
+            color: white;
+        }
+        .form-check {
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="form-container">
-        <h1 class="mb-4">Web Scraper</h1>
-        <form id="scraperForm">
-            <div class="mb-3">
-                <label for="target_url" class="form-label">Target URL</label>
-                <input type="url" class="form-control" id="target_url" name="target_url" required>
-            </div>
-            <div class="mb-3">
-                <label for="container_class" class="form-label">Container Class Name</label>
-                <input type="text" class="form-control" id="container_class" name="container_class" required>
-                <div class="form-text">Enter the class name of the container to scrape (e.g., "product-item")</div>
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="need_login" name="need_login" value="yes">
-                    <label class="form-check-label" for="need_login">
-                        Requires Login
-                    </label>
-                </div>
-            </div>
-            <div id="loginFieldsContainer" class="login-fields" style="display: none;">
-                <div class="mb-3">
-                    <label for="login_url" class="form-label">Login Page URL</label>
-                    <input type="url" class="form-control" id="login_url" name="login_url" required>
-                </div>
-                <div class="mb-3">
-                    <label for="password_page_url" class="form-label">Password Page URL (if separate)</label>
-                    <input type="url" class="form-control" id="password_page_url" name="password_page_url" placeholder="Only needed if password is on a different page">
-                </div>
-                <div class="mb-3">
-                    <label for="login_email" class="form-label">Login Email/Username</label>
-                    <input type="text" class="form-control" id="login_email" name="login_email" required>
-                </div>
-                <div class="mb-3">
-                    <label for="login_password" class="form-label">Login Password</label>
-                    <input type="password" class="form-control" id="login_password" name="login_password" required>
-                </div>
-                <div class="mb-3">
-                    <label for="email_selector" class="form-label">Email Input Selector</label>
-                    <select class="form-select" id="email_selector" name="email_selector" required>
-                        <option value="">Select email input selector</option>
-                        <option value="#email">#email</option>
-                        <option value="#username">#username</option>
-                        <option value="input[name='email']">input[name='email']</option>
-                        <option value="input[name='username']">input[name='username']</option>
-                        <option value="input[type='email']">input[type='email']</option>
-                        <option value="input[type='text']">input[type='text']</option>
-                        <option value="custom">Custom Selector</option>
-                    </select>
-                    <input type="text" class="form-control custom-selector" id="custom_email_selector" style="display: none;" placeholder="Enter custom email selector (e.g., '.login-form input[type=text]')">
-                </div>
-                <div class="mb-3">
-                    <label for="password_selector" class="form-label">Password Input Selector</label>
-                    <select class="form-select" id="password_selector" name="password_selector" required>
-                        <option value="">Select password input selector</option>
-                        <option value="#password">#password</option>
-                        <option value="input[name='password']">input[name='password']</option>
-                        <option value="input[type='password']">input[type='password']</option>
-                        <option value="custom">Custom Selector</option>
-                    </select>
-                    <input type="text" class="form-control custom-selector" id="custom_password_selector" style="display: none;" placeholder="Enter custom password selector">
-                </div>
-                <div class="mb-3">
-                <label for="submit_selector" class="form-label">Submit Button Selector</label>
-                <select class="form-select" id="submit_selector" name="submit_selector" required>
-                    <option value="">Select submit button selector</option>
-                    <option value="button[type='submit']">button[type='submit']</option>
-                    <option value="#submit">#submit</option>
-                    <option value="#login">#login</option>
-                    <option value="#signin">#signin</option>
-                    <option value=".buttonall">.buttonall</option>
-                    <option value="input[type='submit']">input[type='submit']</option>
-                    <option value="custom">Custom Selector</option>
-                </select>
-                <input type="text" class="form-control custom-selector" id="custom_submit_selector" style="display: none;" placeholder="Enter custom submit selector">
-            </div>
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="scrape_images" name="scrape_images" value="yes">
-                    <label class="form-check-label" for="scrape_images">
-                        Scrape Images
-                    </label>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">
-                <span id="submitText">Run Scraper</span>
-                <div id="loadingSpinner" class="spinner-border spinner-border-sm text-light" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </button>
-        </form>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Live Web Scraper</h1>
+            <span id="statusIndicator" class="status-badge">Ready</span>
+        </div>
         
-        <div class="result-container">
-            <div id="resultAlert" class="alert" style="display: none;"></div>
-            <div id="resultData" style="display: none;">
-                <h4>Scraped Data Preview</h4>
-                <div id="dataPreview"></div>
-                <a id="downloadLink" href="#" class="btn btn-success mt-3">Download JSON File</a>
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="scraperForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="target_url" class="form-label">Target URL</label>
+                            <input type="url" class="form-control" id="target_url" required
+                                   placeholder="https://example.com">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="container_class" class="form-label">Container Class</label>
+                            <input type="text" class="form-control" id="container_class" required
+                                   placeholder="product-item or .class-name">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="scrape_images">
+                                <label class="form-check-label" for="scrape_images">Scrape Images</label>
+                            </div>
+                            <div class="download-btn-container" id="downloadBtnContainer">
+                                <a href="#" class="download-link" id="downloadLink">
+                                    <i class="bi bi-download"></i> Download Scraped Data
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3 text-end">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <button type="submit" class="btn btn-primary" id="startBtn">
+                                    <span id="startText">Start Scraping</span>
+                                    <span id="startSpinner" class="spinner-border spinner-border-sm" 
+                                          style="display: none;"></span>
+                                </button>
+                                <button type="button" class="btn btn-danger" id="stopBtn" disabled>
+                                    Stop Scraping
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Scraped Results</h5>
+                <div>
+                    <span id="itemCount" class="item-count">0 items</span>
+                    <button id="clearResults" class="btn btn-sm btn-outline-secondary ms-2">
+                        Clear Results
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="scrapedResults"></div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Toggle login fields visibility
-        document.getElementById('need_login').addEventListener('change', function() {
-            const loginContainer = document.getElementById('loginFieldsContainer');
-            loginContainer.style.display = this.checked ? 'block' : 'none';
-            
-            // Set required attributes
-            const fields = ['login_url', 'login_email', 'login_password', 
-                          'email_selector', 'password_selector', 'submit_selector'];
-            fields.forEach(field => {
-                document.getElementById(field).required = this.checked;
-            });
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const startText = document.getElementById('startText');
+        const startSpinner = document.getElementById('startSpinner');
+        const resultsDiv = document.getElementById('scrapedResults');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const itemCount = document.getElementById('itemCount');
+        const clearResultsBtn = document.getElementById('clearResults');
+        const scrapeImagesCheckbox = document.getElementById('scrape_images');
+        const downloadBtnContainer = document.getElementById('downloadBtnContainer');
+        const downloadLink = document.getElementById('downloadLink');
+        
+        let updateInterval;
+        let totalItems = 0;
+        
+        // Toggle download button visibility
+        scrapeImagesCheckbox.addEventListener('change', function() {
+            downloadBtnContainer.style.display = this.checked ? 'block' : 'none';
         });
 
-        // Handle custom selector inputs
-        document.getElementById('email_selector').addEventListener('change', function() {
-            const customInput = document.getElementById('custom_email_selector');
-            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
-            if (this.value !== 'custom') customInput.value = '';
-            customInput.required = this.value === 'custom';
-        });
-
-        document.getElementById('password_selector').addEventListener('change', function() {
-            const customInput = document.getElementById('custom_password_selector');
-            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
-            if (this.value !== 'custom') customInput.value = '';
-            customInput.required = this.value === 'custom';
-        });
-
-        document.getElementById('submit_selector').addEventListener('change', function() {
-            const customInput = document.getElementById('custom_submit_selector');
-            customInput.style.display = this.value === 'custom' ? 'block' : 'none';
-            if (this.value !== 'custom') customInput.value = '';
-            customInput.required = this.value === 'custom';
-        });
-
-        // Form submission
-        document.getElementById('scraperForm').addEventListener('submit', function(e) {
+        // Start scraping
+        document.getElementById('scraperForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const submitBtn = document.querySelector('#scraperForm button[type="submit"]');
-            const submitText = document.getElementById('submitText');
-            const spinner = document.getElementById('loadingSpinner');
+            const targetUrl = document.getElementById('target_url').value;
+            const containerClass = document.getElementById('container_class').value;
+            const scrapeImages = scrapeImagesCheckbox.checked;
             
-            submitText.style.display = 'none';
-            spinner.style.display = 'inline-block';
+            startBtn.disabled = true;
+            startText.textContent = 'Starting...';
+            startSpinner.style.display = 'inline-block';
+            stopBtn.disabled = false;
+            statusIndicator.textContent = 'Scraping';
+            statusIndicator.style.backgroundColor = '#1cc88a';
             
-            // Clear previous results
-            document.getElementById('resultAlert').style.display = 'none';
-            document.getElementById('resultData').style.display = 'none';
-            
-            // Get selector values, using custom if selected
-            const getSelectorValue = (selectorId, customSelectorId) => {
-                const selector = document.getElementById(selectorId);
-                return selector.value === 'custom' 
-                    ? document.getElementById(customSelectorId).value 
-                    : selector.value;
-            };
-            
-            const emailSelector = getSelectorValue('email_selector', 'custom_email_selector');
-            const passwordSelector = getSelectorValue('password_selector', 'custom_password_selector');
-            const submitSelector = getSelectorValue('submit_selector', 'custom_submit_selector');
-            
-            // Collect form data
-            const formData = {
-                target_url: document.getElementById('target_url').value,
-                container_class: document.getElementById('container_class').value,
-                need_login: document.getElementById('need_login').checked ? 'yes' : 'no',
-                login_url: document.getElementById('login_url').value,
-                password_page_url: document.getElementById('password_page_url').value,
-                scrape_images: document.getElementById('scrape_images').checked ? 'yes' : 'no',
-                login_email: document.getElementById('login_email').value,
-                login_password: document.getElementById('login_password').value,
-                email_selector: emailSelector,
-                password_selector: passwordSelector,
-                submit_selector: submitSelector
-            };
-            
-            fetch('/api/scrape', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData)
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => Promise.reject(err));
-                }
-                return response.json();
-            })
-            .then(data => {
-                const resultAlert = document.getElementById('resultAlert');
-                const resultData = document.getElementById('resultData');
-                const dataPreview = document.getElementById('dataPreview');
-                const downloadLink = document.getElementById('downloadLink');
+            try {
+                const response = await fetch('http://localhost:5000/api/start_scraping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        target_url: targetUrl,
+                        container_class: containerClass,
+                        scrape_images: scrapeImages
+                    })
+                });
+                
+                const data = await response.json();
                 
                 if (data.status === 'success') {
-                    resultAlert.className = 'alert alert-success';
-                    resultAlert.textContent = data.message;
-                    resultAlert.style.display = 'block';
+                    // Start checking for updates
+                    updateInterval = setInterval(checkForUpdates, 1500);
+                    startText.textContent = 'Scraping...';
+                } else {
+                    alert(data.message);
+                    resetUI();
+                }
+            } catch (error) {
+                alert('Error starting scraper: ' + error.message);
+                resetUI();
+            }
+        });
+        
+        // Stop scraping
+        stopBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/stop_scraping', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    clearInterval(updateInterval);
+                    statusIndicator.textContent = 'Ready';
+                    statusIndicator.style.backgroundColor = '#4e73df';
+                    resetUI();
+                }
+            } catch (error) {
+                alert('Error stopping scraper: ' + error.message);
+            }
+        });
+        
+        // Clear results
+        clearResultsBtn.addEventListener('click', () => {
+            resultsDiv.innerHTML = '<div class="text-center py-4 text-muted">No results yet</div>';
+            totalItems = 0;
+            updateItemCount();
+        });
+        
+        // Check for new scraped data
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('http://localhost:5000/api/get_updates');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.data.length > 0) {
+                    if (resultsDiv.children.length === 1 && 
+                        resultsDiv.children[0].classList.contains('text-muted')) {
+                        resultsDiv.innerHTML = '';
+                    }
                     
-                    // Display the scraped data with images
-                    dataPreview.innerHTML = '';
-                    if (data.data && data.data.length > 0) {
-                        data.data.forEach(item => {
+                    data.data.forEach(pageData => {
+                        const pageDiv = document.createElement('div');
+                        pageDiv.className = 'scraped-item';
+                        
+                        const urlDiv = document.createElement('div');
+                        urlDiv.className = 'page-url';
+                        urlDiv.innerHTML = `
+                            <i class="bi bi-link-45deg"></i>
+                            <a href="${pageData.url}" target="_blank">${pageData.url}</a>
+                            <span class="badge bg-secondary ms-2">${pageData.items.length} items</span>
+                        `;
+                        pageDiv.appendChild(urlDiv);
+                        
+                        pageData.items.forEach((item, index) => {
+                            totalItems++;
                             const itemDiv = document.createElement('div');
-                            itemDiv.className = 'data-item';
+                            itemDiv.className = 'item-content mb-3';
                             
-                            const itemHeader = document.createElement('h5');
-                            itemHeader.textContent = `Container ${item.container_number}`;
+                            const itemHeader = document.createElement('h6');
+                            itemHeader.innerHTML = `
+                                <i class="bi bi-collection"></i>
+                                Item ${index + 1}
+                            `;
                             itemDiv.appendChild(itemHeader);
                             
-                            // Add text content
-                            const textContent = document.createElement('div');
-                            for (const key in item) {
-                                if (key.startsWith('content-')) {
-                                    const p = document.createElement('p');
-                                    p.textContent = `${key}: ${item[key]}`;
-                                    textContent.appendChild(p);
-                                }
-                            }
-                            itemDiv.appendChild(textContent);
+                            // Add content
+                            const contentContainer = document.createElement('div');
+                            contentContainer.className = 'content-container';
                             
-                            // Add images if they exist
-                            if (item.images) {
-                                const imagesHeader = document.createElement('h6');
-                                imagesHeader.textContent = 'Images:';
+                            item.content.forEach(line => {
+                                if (line.trim()) {
+                                    const contentLine = document.createElement('div');
+                                    contentLine.className = 'content-line';
+                                    contentLine.textContent = line;
+                                    contentContainer.appendChild(contentLine);
+                                }
+                            });
+                            
+                            itemDiv.appendChild(contentContainer);
+                            
+                            // Add images if available
+                            if (item.images && item.images.length > 0) {
+                                const imagesHeader = document.createElement('div');
+                                imagesHeader.className = 'mt-2 mb-1 fw-bold';
+                                imagesHeader.innerHTML = `
+                                    <i class="bi bi-image"></i>
+                                    Images (${item.images.length}):
+                                `;
                                 itemDiv.appendChild(imagesHeader);
                                 
                                 const imagesContainer = document.createElement('div');
                                 imagesContainer.className = 'image-container';
                                 
-                                item.images.forEach(imgObj => {
-                                    for (const imgKey in imgObj) {
+                                item.images.forEach((imgSrc, imgIndex) => {
+                                    if (imgSrc) {
                                         const img = document.createElement('img');
-                                        img.src = imgObj[imgKey];
+                                        img.src = imgSrc;
                                         img.className = 'scraped-image';
-                                        img.alt = imgKey;
+                                        img.alt = `Image ${imgIndex + 1}`;
+                                        img.title = `Image ${imgIndex + 1}`;
                                         imagesContainer.appendChild(img);
                                     }
                                 });
@@ -268,54 +361,39 @@
                                 itemDiv.appendChild(imagesContainer);
                             }
                             
-                            dataPreview.appendChild(itemDiv);
+                            pageDiv.appendChild(itemDiv);
                         });
-                    } else {
-                        dataPreview.innerHTML = '<p>No data found in the specified containers.</p>';
-                    }
+                        
+                        // Add to top of results
+                        resultsDiv.insertBefore(pageDiv, resultsDiv.firstChild);
+                    });
                     
-                    resultData.style.display = 'block';
-                    downloadLink.href = `/static/scraped_data.json`;
+                    // Update download link
+                    downloadLink.href = `http://localhost:5000/static/scraped_data.json`;
                     downloadLink.download = 'scraped_data.json';
-                } else {
-                    resultAlert.className = 'alert alert-danger';
-                    resultAlert.textContent = data.message;
-                    resultAlert.style.display = 'block';
-                    resultData.style.display = 'none';
+                    
+                    updateItemCount();
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                const resultAlert = document.getElementById('resultAlert');
-                resultAlert.className = 'alert alert-danger';
-                
-                const errorMessage = error.message || 
-                                   (error.error && error.error.message) || 
-                                   'An error occurred during scraping.';
-                
-                if (errorMessage.includes('class name') || errorMessage.includes('No elements found')) {
-                    resultAlert.innerHTML = `
-                        ${errorMessage}<br><br>
-                        <strong>Tips:</strong>
-                        <ul>
-                            <li>Check if the class name is correct</li>
-                            <li>Make sure the elements are visible when the page loads</li>
-                            <li>The page might require JavaScript to render the elements</li>
-                            <li>Try inspecting the page in browser developer tools</li>
-                        </ul>
-                    `;
-                } else {
-                    resultAlert.textContent = errorMessage;
-                }
-                
-                resultAlert.style.display = 'block';
-                document.getElementById('resultData').style.display = 'none';
-            })
-            .finally(() => {
-                submitText.style.display = 'inline';
-                spinner.style.display = 'none';
-            });
-        });
+            } catch (error) {
+                console.error('Error checking for updates:', error);
+            }
+        }
+        
+        function updateItemCount() {
+            itemCount.textContent = `${totalItems} items`;
+        }
+        
+        function resetUI() {
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            startText.textContent = 'Start Scraping';
+            startSpinner.style.display = 'none';
+            downloadBtnContainer.style.display = 'none';
+            scrapeImagesCheckbox.checked = false;
+        }
+        
+        // Initialize
+        resultsDiv.innerHTML = '<div class="text-center py-4 text-muted">No results yet</div>';
     </script>
 </body>
 </html>
