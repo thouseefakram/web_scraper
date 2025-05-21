@@ -98,6 +98,7 @@ def run_scraper(target_url, container_class, scrape_images):
                 current_page_data.clear()
                 save_data()
             browser.close()
+            scraping_active = False
 
 def save_data():
     try:
@@ -171,6 +172,13 @@ def stop_scraping():
             pass
     
     return jsonify({"status": "success", "message": "Scraping stopped"})
+
+@app.route('/api/check_status', methods=['GET'])
+def check_status():
+    return jsonify({
+        "scraping_active": scraping_active,
+        "browser_open": browser_instance is not None and browser_instance.is_connected()
+    })
 
 @app.route('/api/download_data', methods=['GET'])
 def download_data():

@@ -173,16 +173,11 @@
                             </div>
                         </div>
                         <div class="col-md-6 mb-3 text-end">
-                            <div class="d-flex gap-2 justify-content-end">
-                                <button type="submit" class="btn btn-primary" id="startBtn">
-                                    <span id="startText">Start Scraping</span>
-                                    <span id="startSpinner" class="spinner-border spinner-border-sm" 
-                                          style="display: none;"></span>
-                                </button>
-                                <button type="button" class="btn btn-danger" id="stopBtn" disabled>
-                                    Stop Scraping
-                                </button>
-                            </div>
+                            <button type="submit" class="btn btn-primary" id="startBtn">
+                                <span id="startText">Start Scraping</span>
+                                <span id="startSpinner" class="spinner-border spinner-border-sm" 
+                                      style="display: none;"></span>
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -215,7 +210,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
         const startText = document.getElementById('startText');
         const startSpinner = document.getElementById('startSpinner');
         const resultsDiv = document.getElementById('scrapedResults');
@@ -231,10 +225,13 @@
         let uniqueItems = 0;
         let seenHashes = new Set();
         let hasData = false;
+        let isScraping = false;
         
         // Start scraping
         document.getElementById('scraperForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            if (isScraping) return;
             
             const targetUrl = document.getElementById('target_url').value;
             const containerClass = document.getElementById('container_class').value;
@@ -243,7 +240,6 @@
             startBtn.disabled = true;
             startText.textContent = 'Starting...';
             startSpinner.style.display = 'inline-block';
-            stopBtn.disabled = false;
             statusIndicator.textContent = 'Scraping';
             statusIndicator.style.backgroundColor = '#1cc88a';
             loadingText.style.display = 'block';
@@ -255,6 +251,7 @@
             uniqueItems = 0;
             seenHashes = new Set();
             hasData = false;
+            isScraping = true;
             updateCounters();
             downloadResultsBtn.style.display = 'none';
             
@@ -277,6 +274,30 @@
                     // Start checking for updates
                     updateInterval = setInterval(checkForUpdates, 1500);
                     startText.textContent = 'Scraping...';
+                    
+                    // Check if browser is closed periodically
+                    const browserCheckInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch('http://localhost:5000/api/check_status');
+                            const statusData = await statusResponse.json();
+                            
+                            if (!statusData.scraping_active) {
+                                clearInterval(browserCheckInterval);
+                                handleScrapingStopped();
+                            }
+                        } catch (error) {
+                            console.error('Error checking status:', error);
+                            clearInterval(browserCheckInterval);
+                            handleScrapingStopped();
+                        }
+                    }, 2000);
+                    
+                    // Also check when window is closed
+                    window.addEventListener('beforeunload', async () => {
+                        await fetch('http://localhost:5000/api/stop_scraping', {
+                            method: 'POST'
+                        });
+                    });
                 } else {
                     alert(data.message);
                     resetUI();
@@ -284,27 +305,6 @@
             } catch (error) {
                 alert('Error starting scraper: ' + error.message);
                 resetUI();
-            }
-        });
-        
-        // Stop scraping
-        stopBtn.addEventListener('click', async () => {
-            try {
-                const response = await fetch('http://localhost:5000/api/stop_scraping', {
-                    method: 'POST'
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    clearInterval(updateInterval);
-                    statusIndicator.textContent = 'Ready';
-                    statusIndicator.style.backgroundColor = '#4e73df';
-                    resetUI();
-                    loadingText.style.display = 'none';
-                }
-            } catch (error) {
-                alert('Error stopping scraper: ' + error.message);
             }
         });
         
@@ -457,6 +457,15 @@
             }
         }
         
+        function handleScrapingStopped() {
+            clearInterval(updateInterval);
+            statusIndicator.textContent = 'Ready';
+            statusIndicator.style.backgroundColor = '#4e73df';
+            resetUI();
+            loadingText.style.display = 'none';
+            isScraping = false;
+        }
+        
         // Simple hash function for content
         function hashCode(s) {
             let h = 0;
@@ -473,7 +482,6 @@
         
         function resetUI() {
             startBtn.disabled = false;
-            stopBtn.disabled = true;
             startText.textContent = 'Start Scraping';
             startSpinner.style.display = 'none';
         }
