@@ -133,6 +133,14 @@
             color: #6c757d;
             font-style: italic;
         }
+        .class-badge {
+            background-color: #6c757d;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
         @media (max-width: 768px) {
             .form-container {
                 padding: 15px;
@@ -160,9 +168,9 @@
                                    placeholder="https://example.com">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="container_class" class="form-label">Container Class</label>
+                            <label for="container_class" class="form-label">Container Classes (comma separated)</label>
                             <input type="text" class="form-control" id="container_class" required
-                                   placeholder="product-item or .class-name">
+                                   placeholder="product-item, .price, .description">
                         </div>
                     </div>
                     <div class="row">
@@ -226,6 +234,7 @@
         let seenHashes = new Set();
         let hasData = false;
         let isScraping = false;
+        let browserCheckInterval;
         
         // Start scraping
         document.getElementById('scraperForm').addEventListener('submit', async (e) => {
@@ -234,7 +243,7 @@
             if (isScraping) return;
             
             const targetUrl = document.getElementById('target_url').value;
-            const containerClass = document.getElementById('container_class').value;
+            const containerClasses = document.getElementById('container_class').value;
             const scrapeImages = document.getElementById('scrape_images').checked;
             
             startBtn.disabled = true;
@@ -263,7 +272,7 @@
                     },
                     body: JSON.stringify({
                         target_url: targetUrl,
-                        container_class: containerClass,
+                        container_class: containerClasses,
                         scrape_images: scrapeImages
                     })
                 });
@@ -276,7 +285,7 @@
                     startText.textContent = 'Scraping...';
                     
                     // Check if browser is closed periodically
-                    const browserCheckInterval = setInterval(async () => {
+                    browserCheckInterval = setInterval(async () => {
                         try {
                             const statusResponse = await fetch('http://localhost:5000/api/check_status');
                             const statusData = await statusResponse.json();
@@ -398,6 +407,15 @@
                                 
                                 const itemHeader = document.createElement('h6');
                                 itemHeader.textContent = `Item ${index + 1}`;
+                                
+                                // Add class badge
+                                if (item.source_class) {
+                                    const classBadge = document.createElement('span');
+                                    classBadge.className = 'class-badge';
+                                    classBadge.textContent = item.source_class;
+                                    itemHeader.appendChild(classBadge);
+                                }
+                                
                                 itemDiv.appendChild(itemHeader);
                                 
                                 // Add content
@@ -459,6 +477,7 @@
         
         function handleScrapingStopped() {
             clearInterval(updateInterval);
+            if (browserCheckInterval) clearInterval(browserCheckInterval);
             statusIndicator.textContent = 'Ready';
             statusIndicator.style.backgroundColor = '#4e73df';
             resetUI();
