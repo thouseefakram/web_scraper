@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Web Scraper</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         :root {
             --primary-color: #4e73df;
@@ -98,27 +98,48 @@
             color: #6c757d;
             margin-left: 5px;
         }
-        .download-btn-container {
-            margin-top: 10px;
+        .unique-badge {
+            background-color: #1cc88a;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #downloadResults {
             display: none;
         }
-        .download-link {
-            display: block;
-            width: 100%;
+        .loading-text {
+            display: none;
+            color: #6c757d;
+            font-style: italic;
+        }
+        .no-results {
             text-align: center;
-            padding: 8px;
-            border-radius: 4px;
-            background-color: #28a745;
-            color: white;
-            text-decoration: none;
-            transition: background-color 0.2s;
+            padding: 20px;
+            color: #6c757d;
+            font-style: italic;
         }
-        .download-link:hover {
-            background-color: #218838;
-            color: white;
-        }
-        .form-check {
-            margin-bottom: 5px;
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 15px;
+            }
+            .header-controls {
+                margin-top: 10px;
+            }
         }
     </style>
 </head>
@@ -150,11 +171,6 @@
                                 <input type="checkbox" class="form-check-input" id="scrape_images">
                                 <label class="form-check-label" for="scrape_images">Scrape Images</label>
                             </div>
-                            <div class="download-btn-container" id="downloadBtnContainer">
-                                <a href="#" class="download-link" id="downloadLink">
-                                    <i class="bi bi-download"></i> Download Scraped Data
-                                </a>
-                            </div>
                         </div>
                         <div class="col-md-6 mb-3 text-end">
                             <div class="d-flex gap-2 justify-content-end">
@@ -174,17 +190,24 @@
         </div>
 
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header">
                 <h5 class="mb-0">Scraped Results</h5>
-                <div>
-                    <span id="itemCount" class="item-count">0 items</span>
-                    <button id="clearResults" class="btn btn-sm btn-outline-secondary ms-2">
+                <div class="header-controls">
+                    <div>
+                        <span id="itemCount" class="item-count">0 items</span>
+                        <span id="uniqueCount" class="unique-badge">0 unique</span>
+                    </div>
+                    <button id="downloadResults" class="btn btn-sm btn-success">
+                        <i class="bi bi-download"></i> Download JSON
+                    </button>
+                    <button id="clearResults" class="btn btn-sm btn-outline-secondary">
                         Clear Results
                     </button>
                 </div>
             </div>
             <div class="card-body">
-                <div id="scrapedResults"></div>
+                <div id="loadingText" class="loading-text">Loading scraped data...</div>
+                <div id="scrapedResults" class="no-results">No results yet. Start scraping to see data here.</div>
             </div>
         </div>
     </div>
@@ -198,26 +221,24 @@
         const resultsDiv = document.getElementById('scrapedResults');
         const statusIndicator = document.getElementById('statusIndicator');
         const itemCount = document.getElementById('itemCount');
+        const uniqueCount = document.getElementById('uniqueCount');
         const clearResultsBtn = document.getElementById('clearResults');
-        const scrapeImagesCheckbox = document.getElementById('scrape_images');
-        const downloadBtnContainer = document.getElementById('downloadBtnContainer');
-        const downloadLink = document.getElementById('downloadLink');
+        const downloadResultsBtn = document.getElementById('downloadResults');
+        const loadingText = document.getElementById('loadingText');
         
         let updateInterval;
         let totalItems = 0;
+        let uniqueItems = 0;
+        let seenHashes = new Set();
+        let hasData = false;
         
-        // Toggle download button visibility
-        scrapeImagesCheckbox.addEventListener('change', function() {
-            downloadBtnContainer.style.display = this.checked ? 'block' : 'none';
-        });
-
         // Start scraping
         document.getElementById('scraperForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const targetUrl = document.getElementById('target_url').value;
             const containerClass = document.getElementById('container_class').value;
-            const scrapeImages = scrapeImagesCheckbox.checked;
+            const scrapeImages = document.getElementById('scrape_images').checked;
             
             startBtn.disabled = true;
             startText.textContent = 'Starting...';
@@ -225,6 +246,17 @@
             stopBtn.disabled = false;
             statusIndicator.textContent = 'Scraping';
             statusIndicator.style.backgroundColor = '#1cc88a';
+            loadingText.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            resultsDiv.classList.remove('no-results');
+            
+            // Reset counters
+            totalItems = 0;
+            uniqueItems = 0;
+            seenHashes = new Set();
+            hasData = false;
+            updateCounters();
+            downloadResultsBtn.style.display = 'none';
             
             try {
                 const response = await fetch('http://localhost:5000/api/start_scraping', {
@@ -269,6 +301,7 @@
                     statusIndicator.textContent = 'Ready';
                     statusIndicator.style.backgroundColor = '#4e73df';
                     resetUI();
+                    loadingText.style.display = 'none';
                 }
             } catch (error) {
                 alert('Error stopping scraper: ' + error.message);
@@ -277,9 +310,44 @@
         
         // Clear results
         clearResultsBtn.addEventListener('click', () => {
-            resultsDiv.innerHTML = '<div class="text-center py-4 text-muted">No results yet</div>';
+            resultsDiv.innerHTML = '';
+            resultsDiv.classList.add('no-results');
+            resultsDiv.textContent = 'No results yet. Start scraping to see data here.';
             totalItems = 0;
-            updateItemCount();
+            uniqueItems = 0;
+            hasData = false;
+            updateCounters();
+            downloadResultsBtn.style.display = 'none';
+            loadingText.style.display = 'none';
+        });
+        
+        // Download results
+        downloadResultsBtn.addEventListener('click', async () => {
+            downloadResultsBtn.disabled = true;
+            downloadResultsBtn.innerHTML = '<i class="bi bi-download"></i> Downloading...';
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/download_data');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to download data');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'scraped_data.json';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                alert('Error downloading data: ' + error.message);
+            } finally {
+                downloadResultsBtn.disabled = false;
+                downloadResultsBtn.innerHTML = '<i class="bi bi-download"></i> Download JSON';
+            }
         });
         
         // Check for new scraped data
@@ -289,9 +357,17 @@
                 const data = await response.json();
                 
                 if (data.status === 'success' && data.data.length > 0) {
-                    if (resultsDiv.children.length === 1 && 
-                        resultsDiv.children[0].classList.contains('text-muted')) {
+                    loadingText.style.display = 'none';
+                    
+                    // Show download button when we first get data
+                    if (!hasData) {
+                        hasData = true;
+                        downloadResultsBtn.style.display = 'inline-block';
+                    }
+                    
+                    if (resultsDiv.classList.contains('no-results')) {
                         resultsDiv.innerHTML = '';
+                        resultsDiv.classList.remove('no-results');
                     }
                     
                     data.data.forEach(pageData => {
@@ -301,7 +377,6 @@
                         const urlDiv = document.createElement('div');
                         urlDiv.className = 'page-url';
                         urlDiv.innerHTML = `
-                            <i class="bi bi-link-45deg"></i>
                             <a href="${pageData.url}" target="_blank">${pageData.url}</a>
                             <span class="badge bg-secondary ms-2">${pageData.items.length} items</span>
                         `;
@@ -309,78 +384,91 @@
                         
                         pageData.items.forEach((item, index) => {
                             totalItems++;
-                            const itemDiv = document.createElement('div');
-                            itemDiv.className = 'item-content mb-3';
                             
-                            const itemHeader = document.createElement('h6');
-                            itemHeader.innerHTML = `
-                                <i class="bi bi-collection"></i>
-                                Item ${index + 1}
-                            `;
-                            itemDiv.appendChild(itemHeader);
+                            // Create content hash to check for duplicates
+                            const contentStr = item.content.join('|');
+                            const contentHash = hashCode(contentStr);
                             
-                            // Add content
-                            const contentContainer = document.createElement('div');
-                            contentContainer.className = 'content-container';
-                            
-                            item.content.forEach(line => {
-                                if (line.trim()) {
-                                    const contentLine = document.createElement('div');
-                                    contentLine.className = 'content-line';
-                                    contentLine.textContent = line;
-                                    contentContainer.appendChild(contentLine);
-                                }
-                            });
-                            
-                            itemDiv.appendChild(contentContainer);
-                            
-                            // Add images if available
-                            if (item.images && item.images.length > 0) {
-                                const imagesHeader = document.createElement('div');
-                                imagesHeader.className = 'mt-2 mb-1 fw-bold';
-                                imagesHeader.innerHTML = `
-                                    <i class="bi bi-image"></i>
-                                    Images (${item.images.length}):
-                                `;
-                                itemDiv.appendChild(imagesHeader);
+                            if (!seenHashes.has(contentHash)) {
+                                seenHashes.add(contentHash);
+                                uniqueItems++;
                                 
-                                const imagesContainer = document.createElement('div');
-                                imagesContainer.className = 'image-container';
+                                const itemDiv = document.createElement('div');
+                                itemDiv.className = 'item-content mb-3';
                                 
-                                item.images.forEach((imgSrc, imgIndex) => {
-                                    if (imgSrc) {
-                                        const img = document.createElement('img');
-                                        img.src = imgSrc;
-                                        img.className = 'scraped-image';
-                                        img.alt = `Image ${imgIndex + 1}`;
-                                        img.title = `Image ${imgIndex + 1}`;
-                                        imagesContainer.appendChild(img);
+                                const itemHeader = document.createElement('h6');
+                                itemHeader.textContent = `Item ${index + 1}`;
+                                itemDiv.appendChild(itemHeader);
+                                
+                                // Add content
+                                const contentContainer = document.createElement('div');
+                                contentContainer.className = 'content-container';
+                                
+                                item.content.forEach(line => {
+                                    if (line.trim()) {
+                                        const contentLine = document.createElement('div');
+                                        contentLine.className = 'content-line';
+                                        contentLine.textContent = line;
+                                        contentContainer.appendChild(contentLine);
                                     }
                                 });
                                 
-                                itemDiv.appendChild(imagesContainer);
+                                itemDiv.appendChild(contentContainer);
+                                
+                                // Add images if available
+                                if (item.images && item.images.length > 0) {
+                                    const imagesHeader = document.createElement('div');
+                                    imagesHeader.className = 'mt-2 mb-1 fw-bold';
+                                    imagesHeader.textContent = `Images (${item.images.length}):`;
+                                    itemDiv.appendChild(imagesHeader);
+                                    
+                                    const imagesContainer = document.createElement('div');
+                                    imagesContainer.className = 'image-container';
+                                    
+                                    item.images.forEach((imgSrc, imgIndex) => {
+                                        if (imgSrc) {
+                                            const img = document.createElement('img');
+                                            img.src = imgSrc;
+                                            img.className = 'scraped-image';
+                                            img.alt = `Image ${imgIndex + 1}`;
+                                            img.title = `Image ${imgIndex + 1}`;
+                                            imagesContainer.appendChild(img);
+                                        }
+                                    });
+                                    
+                                    itemDiv.appendChild(imagesContainer);
+                                }
+                                
+                                pageDiv.appendChild(itemDiv);
                             }
-                            
-                            pageDiv.appendChild(itemDiv);
                         });
                         
                         // Add to top of results
-                        resultsDiv.insertBefore(pageDiv, resultsDiv.firstChild);
+                        if (pageDiv.children.length > 1) {
+                            resultsDiv.insertBefore(pageDiv, resultsDiv.firstChild);
+                        }
                     });
                     
-                    // Update download link
-                    downloadLink.href = `http://localhost:5000/static/scraped_data.json`;
-                    downloadLink.download = 'scraped_data.json';
-                    
-                    updateItemCount();
+                    updateCounters();
                 }
             } catch (error) {
                 console.error('Error checking for updates:', error);
+                loadingText.style.display = 'none';
             }
         }
         
-        function updateItemCount() {
+        // Simple hash function for content
+        function hashCode(s) {
+            let h = 0;
+            for (let i = 0; i < s.length; i++) {
+                h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+            }
+            return h;
+        }
+        
+        function updateCounters() {
             itemCount.textContent = `${totalItems} items`;
+            uniqueCount.textContent = `${uniqueItems} unique`;
         }
         
         function resetUI() {
@@ -388,12 +476,10 @@
             stopBtn.disabled = true;
             startText.textContent = 'Start Scraping';
             startSpinner.style.display = 'none';
-            downloadBtnContainer.style.display = 'none';
-            scrapeImagesCheckbox.checked = false;
         }
         
         // Initialize
-        resultsDiv.innerHTML = '<div class="text-center py-4 text-muted">No results yet</div>';
+        updateCounters();
     </script>
 </body>
 </html>

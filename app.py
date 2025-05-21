@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from playwright.sync_api import sync_playwright
 import json
@@ -6,6 +6,8 @@ import os
 import threading
 import time
 from queue import Queue
+from hashlib import md5
+import io
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +19,12 @@ data_queue = Queue()
 scraping_active = False
 output_file = 'scraped_data.json'
 current_page_data = []
+seen_items = set()
+
+def get_content_hash(content):
+    """Generate hash for content to detect duplicates"""
+    content_str = '|'.join(content)
+    return md5(content_str.encode()).hexdigest()
 
 def run_scraper(target_url, container_class, scrape_images):
     global browser_instance, scraping_active, current_page_data
@@ -50,6 +58,14 @@ def run_scraper(target_url, container_class, scrape_images):
                         content = container.inner_text().strip().split("\n")
                         content = [part.strip() for part in content if part.strip()]
                         
+                        if not content:
+                            continue
+                            
+                        content_hash = get_content_hash(content)
+                        if content_hash in seen_items:
+                            continue
+                        seen_items.add(content_hash)
+                        
                         item = {"content": content}
                         
                         if scrape_images:
@@ -68,14 +84,12 @@ def run_scraper(target_url, container_class, scrape_images):
                 except Exception as e:
                     print(f"Scraping error: {e}")
                 
-                # Wait before checking again
                 try:
                     page.wait_for_timeout(3000)
                 except:
                     break
                 
         finally:
-            # Save any remaining data before closing
             if current_page_data:
                 data_queue.put({
                     "url": last_url,
@@ -106,7 +120,7 @@ def save_data():
 
 @app.route('/api/start_scraping', methods=['POST'])
 def start_scraping():
-    global scraping_thread, scraping_active, current_page_data
+    global scraping_thread, scraping_active, current_page_data, seen_items
     
     if scraping_active:
         return jsonify({"status": "error", "message": "Scraping already in progress"})
@@ -119,8 +133,8 @@ def start_scraping():
     if not target_url or not container_class:
         return jsonify({"status": "error", "message": "Missing required parameters"})
     
-    # Reset data
     current_page_data = []
+    seen_items = set()
     if os.path.exists(f'static/{output_file}'):
         os.remove(f'static/{output_file}')
     
@@ -158,13 +172,29 @@ def stop_scraping():
     
     return jsonify({"status": "success", "message": "Scraping stopped"})
 
+@app.route('/api/download_data', methods=['GET'])
+def download_data():
+    if not os.path.exists(f'static/{output_file}'):
+        return jsonify({"status": "error", "message": "No data available"}), 404
+    
+    with open(f'static/{output_file}', 'r') as f:
+        data = json.load(f)
+    
+    # Create in-memory file
+    mem_file = io.BytesIO()
+    mem_file.write(json.dumps(data, indent=2).encode('utf-8'))
+    mem_file.seek(0)
+    
+    return send_file(
+        mem_file,
+        mimetype='application/json',
+        as_attachment=True,
+        download_name='scraped_data.json'
+    )
+
 @app.route('/')
 def serve_frontend():
     return send_from_directory('.', 'index.html')
-
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
