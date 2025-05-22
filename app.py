@@ -26,7 +26,7 @@ def get_content_hash(content):
     content_str = '|'.join(content)
     return md5(content_str.encode()).hexdigest()
 
-def run_scraper(target_url, container_classes, scrape_images):
+def run_scraper(target_url, container_class, scrape_images):
     global browser_instance, scraping_active, current_page_data
     
     with sync_playwright() as p:
@@ -52,41 +52,31 @@ def run_scraper(target_url, container_classes, scrape_images):
                 
                 # Scrape current page
                 try:
-                    # Split the container_classes string into individual class names
-                    class_list = [cls.strip() for cls in container_classes.split(',')]
+                    containers = page.query_selector_all(f'.{container_class.replace(" ", ".")}')
                     
-                    # Process each class separately
-                    for container_class in class_list:
-                        # Remove any leading . if present
-                        clean_class = container_class.lstrip('.')
-                        containers = page.query_selector_all(f'.{clean_class}')
+                    for container in containers:
+                        content = container.inner_text().strip().split("\n")
+                        content = [part.strip() for part in content if part.strip()]
                         
-                        for container in containers:
-                            content = container.inner_text().strip().split("\n")
-                            content = [part.strip() for part in content if part.strip()]
+                        if not content:
+                            continue
                             
-                            if not content:
-                                continue
-                                
-                            content_hash = get_content_hash(content)
-                            if content_hash in seen_items:
-                                continue
-                            seen_items.add(content_hash)
-                            
-                            item = {
-                                "content": content,
-                                "source_class": clean_class  # Add which class this came from
-                            }
-                            
-                            if scrape_images:
-                                images = container.query_selector_all('img')
-                                item["images"] = [
-                                    img.get_attribute('src') 
-                                    for img in images 
-                                    if img.get_attribute('src')
-                                ]
-                            
-                            current_page_data.append(item)
+                        content_hash = get_content_hash(content)
+                        if content_hash in seen_items:
+                            continue
+                        seen_items.add(content_hash)
+                        
+                        item = {"content": content}
+                        
+                        if scrape_images:
+                            images = container.query_selector_all('img')
+                            item["images"] = [
+                                img.get_attribute('src') 
+                                for img in images 
+                                if img.get_attribute('src')
+                            ]
+                        
+                        current_page_data.append(item)
                     
                     if current_page_data:
                         save_data()
@@ -138,10 +128,10 @@ def start_scraping():
     
     data = request.get_json()
     target_url = data.get('target_url')
-    container_classes = data.get('container_class')
+    container_class = data.get('container_class')
     scrape_images = data.get('scrape_images', False)
     
-    if not target_url or not container_classes:
+    if not target_url or not container_class:
         return jsonify({"status": "error", "message": "Missing required parameters"})
     
     current_page_data = []
@@ -153,7 +143,7 @@ def start_scraping():
     
     scraping_thread = threading.Thread(
         target=run_scraper,
-        args=(target_url, container_classes, scrape_images)
+        args=(target_url, container_class, scrape_images)
     )
     scraping_thread.start()
     
